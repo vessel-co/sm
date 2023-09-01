@@ -46,7 +46,7 @@ if (import.meta.main) {
       options: ssoSessions.map((session) => ({
         name: session.sso_session_name,
         value: session,
-      })),
+      })).sort((a, b) => a.name.localeCompare(b.name)),
     }) as any; // There's a bug in the typings for Select.prompt.
   } else {
     console.log(
@@ -116,8 +116,8 @@ if (import.meta.main) {
         options: account.roles.map((role) => ({
           name: role,
           value: { accountId: account.accountId, roleName: role },
-        })),
-      })),
+        })).sort((a, b) => a.name!.localeCompare(b.name!)),
+      })).sort((a, b) => a.name.localeCompare(b.name)),
     }) as any;
 
   const shortTermCredentials = await ssoClient.send(
@@ -154,7 +154,9 @@ if (import.meta.main) {
 
   const selectedInstance: string = await Select.prompt({
     message: "SSM into an EC2 instance",
-    options: namedInstances.map((instance) => ({
+    options: namedInstances.sort(
+      (a, b) => a.name.localeCompare(b.name),
+    ).map((instance) => ({
       name: `${instance.instanceId} - ${instance.name}`,
       value: instance.instanceId,
     })),
