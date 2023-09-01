@@ -71,7 +71,9 @@ if (import.meta.main) {
     Deno.exit(1);
   }
 
-  const ssoClient = new SSO.SSOClient();
+  const ssoClient = new SSO.SSOClient({
+    region: selectedSession.sso_region,
+  });
 
   const accounts = await ssoClient.send(
     new SSO.ListAccountsCommand({
@@ -129,6 +131,7 @@ if (import.meta.main) {
   );
 
   const ec2Client = new EC2.EC2Client({
+    region: selectedSession.sso_region,
     credentials: {
       accessKeyId: shortTermCredentials.roleCredentials?.accessKeyId!,
       sessionToken: shortTermCredentials.roleCredentials?.sessionToken!,
@@ -175,6 +178,7 @@ if (import.meta.main) {
       AWS_SECRET_ACCESS_KEY: shortTermCredentials.roleCredentials
         ?.secretAccessKey!,
       AWS_SESSION_TOKEN: shortTermCredentials.roleCredentials?.sessionToken!,
+      AWS_REGION: selectedSession.sso_region,
     },
     stderr: "inherit",
     stdin: "inherit",
