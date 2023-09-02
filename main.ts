@@ -6,9 +6,7 @@ const command = new Command()
   .version("0.0.1")
   .description("A single command line tool for SSM'ing into ec2 instances");
 
-if (import.meta.main) {
-  await command.parse(Deno.args);
-
+const promptForSsoSession = async () => {
   const ssoSessions = Object.entries(await AWS.loadSsoSessionData()).map(
     ([key, value]) => ({
       sso_session_name: key,
@@ -59,10 +57,14 @@ if (import.meta.main) {
     }) as any; // There's a bug in the typings for Select.prompt.
   }
 
+  return selectedSession;
+};
+
+const loadSsoTokenFromName = async (sessionName: string) => {
   let ssoToken: AWS.SSOToken;
 
   try {
-    ssoToken = await AWS.getSSOTokenFromFile(selectedSession.sso_session_name);
+    ssoToken = await AWS.getSSOTokenFromFile(sessionName);
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) {
       throw e;
@@ -70,18 +72,19 @@ if (import.meta.main) {
 
     // todo: if this fails, do an sso login automatically
     console.log(
-      "SSO token not found. Run `aws sso login --sso-session" +
-        selectedSession.sso_session_name + "` first.",
+      `SSO token not found. Run \`aws sso login --sso-session ${sessionName}\` first.`,
     );
 
     Deno.exit(1);
   }
 
-  // todo: if this fails, also do an aws sso login automatically
-  const ssoClient = new SSO.SSOClient({
-    region: selectedSession.sso_region,
-  });
+  return ssoToken;
+};
 
+const getAccountsAndRoles = async (
+  ssoClient: SSO.SSOClient,
+  ssoToken: AWS.SSOToken,
+) => {
   const accounts = await ssoClient.send(
     new SSO.ListAccountsCommand({
       accessToken: ssoToken.accessToken,
@@ -99,7 +102,7 @@ if (import.meta.main) {
     ) ?? [],
   );
 
-  const accountsWithRoles = accounts.accountList?.map((account) => {
+  return accounts.accountList?.map((account) => {
     const roles = rolesPerAccount.find((roles) =>
       roles.roleList?.find((role) =>
         role.accountId === account.accountId
@@ -111,6 +114,63 @@ if (import.meta.main) {
       roles: roles.map((role) => role.roleName),
     };
   });
+};
+
+const startSsmProcessIntoInstance = (
+  { region, instanceId, creds }: {
+    region: string;
+    instanceId: string;
+    creds: SSO.RoleCredentials;
+  },
+) => {
+  const ssmCommand = new Deno.Command("aws", {
+    args: [
+      "ssm",
+      "start-session",
+      "--target",
+      instanceId,
+    ],
+    env: {
+      AWS_ACCESS_KEY_ID: creds?.accessKeyId!,
+      AWS_SECRET_ACCESS_KEY: creds
+        ?.secretAccessKey!,
+      AWS_SESSION_TOKEN: creds?.sessionToken!,
+      AWS_REGION: region,
+    },
+    stderr: "inherit",
+    stdin: "inherit",
+    stdout: "inherit",
+  });
+
+  const ssmSubprocess = ssmCommand.spawn();
+  ssmSubprocess.ref();
+
+  // Listen to all signals and forward them to the subprocess.
+  const forwardedSignals: Deno.Signal[] = [
+    "SIGINT",
+    "SIGQUIT",
+    "SIGTERM",
+    "SIGTSTP",
+    "SIGABRT",
+  ];
+  for (const signal of forwardedSignals) {
+    Deno.addSignalListener(signal, () => ssmSubprocess.kill(signal));
+  }
+};
+
+if (import.meta.main) {
+  await command.parse(Deno.args);
+
+  const selectedSession = await promptForSsoSession();
+
+  const ssoToken = await loadSsoTokenFromName(selectedSession.sso_session_name);
+
+  // todo: if this fails, also do an aws sso login automatically
+  const ssoClient = new SSO.SSOClient({
+    region: selectedSession.sso_region,
+  });
+
+  const accountsWithRoles = await getAccountsAndRoles(ssoClient, ssoToken);
 
   if (!accountsWithRoles || accountsWithRoles.length === 0) {
     console.error("No accounts or roles found");
@@ -172,38 +232,9 @@ if (import.meta.main) {
     })),
   }) as any;
 
-  // run aws ssm start-session --target $instanceId
-  const ssmCommand = new Deno.Command("aws", {
-    args: [
-      "ssm",
-      "start-session",
-      "--target",
-      selectedInstance,
-    ],
-    env: {
-      AWS_ACCESS_KEY_ID: shortTermCredentials.roleCredentials?.accessKeyId!,
-      AWS_SECRET_ACCESS_KEY: shortTermCredentials.roleCredentials
-        ?.secretAccessKey!,
-      AWS_SESSION_TOKEN: shortTermCredentials.roleCredentials?.sessionToken!,
-      AWS_REGION: selectedSession.sso_region,
-    },
-    stderr: "inherit",
-    stdin: "inherit",
-    stdout: "inherit",
+  startSsmProcessIntoInstance({
+    region: selectedSession.sso_region,
+    instanceId: selectedInstance,
+    creds: shortTermCredentials.roleCredentials!,
   });
-
-  const ssmSubprocess = ssmCommand.spawn();
-  ssmSubprocess.ref();
-
-  // Listen to all signals and forward them to the subprocess.
-  const forwardedSignals: Deno.Signal[] = [
-    "SIGINT",
-    "SIGQUIT",
-    "SIGTERM",
-    "SIGTSTP",
-    "SIGABRT",
-  ];
-  for (const signal of forwardedSignals) {
-    Deno.addSignalListener(signal, () => ssmSubprocess.kill(signal));
-  }
 }

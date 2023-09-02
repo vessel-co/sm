@@ -109,7 +109,8 @@
     "specifiers": {
       "@aws-sdk/client-ec2@3.405.0": "@aws-sdk/client-ec2@3.405.0",
       "@aws-sdk/client-sso@3.405.0": "@aws-sdk/client-sso@3.405.0",
-      "@smithy/shared-ini-file-loader": "@smithy/shared-ini-file-loader@2.0.6"
+      "@smithy/shared-ini-file-loader": "@smithy/shared-ini-file-loader@2.0.6",
+      "@smithy/shared-ini-file-loader@2.0.6": "@smithy/shared-ini-file-loader@2.0.6"
     },
     "packages": {
       "@aws-crypto/crc32@3.0.0": {
