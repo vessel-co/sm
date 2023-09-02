@@ -1,5 +1,4 @@
 import { colors, Command, Select, Table } from "./deps.ts";
-
 import { AWS, EC2, SSO } from "./deps.ts";
 
 const command = new Command()
@@ -166,7 +165,7 @@ if (import.meta.main) {
   }) as any;
 
   // run aws ssm start-session --target $instanceId
-  const ssmSubprocess = new Deno.Command("aws", {
+  const ssmCommand = new Deno.Command("aws", {
     args: [
       "ssm",
       "start-session",
@@ -185,5 +184,18 @@ if (import.meta.main) {
     stdout: "inherit",
   });
 
-  ssmSubprocess.spawn();
+  const ssmSubprocess = ssmCommand.spawn();
+  ssmSubprocess.ref();
+
+  // Listen to all signals and forward them to the subprocess.
+  const forwardedSignals: Deno.Signal[] = [
+    "SIGINT",
+    "SIGQUIT",
+    "SIGTERM",
+    "SIGTSTP",
+    "SIGABRT",
+  ];
+  for (const signal of forwardedSignals) {
+    Deno.addSignalListener(signal, () => ssmSubprocess.kill(signal));
+  }
 }
