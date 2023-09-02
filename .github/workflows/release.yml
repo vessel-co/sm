@@ -14,7 +14,7 @@ jobs:
         with:
           deno-version: "1.36.0"
       - name: Install
-        run: deno cache depts.
+        run: deno cache deps.ts
       - name: Compile
         run: deno task compile-all
       - name: Upload binaries to release
