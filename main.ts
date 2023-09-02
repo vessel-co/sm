@@ -3,7 +3,7 @@ import { AWS, EC2, SSO } from "./deps.ts";
 
 const command = new Command()
   .name("sm")
-  .version("0.0.1")
+  .version("0.0.2")
   .description("A single command line tool for SSM'ing into ec2 instances");
 
 const promptForSsoSession = async () => {

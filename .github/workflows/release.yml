@@ -17,9 +17,28 @@ jobs:
         run: deno cache deps.ts
       - name: Compile
         run: deno task compile-all
-      - name: Upload binaries to release
+      - name: Upload Linux binaries
         uses: svenstaro/upload-release-action@v2
         with:
-          file: bin/*
+          file: bin/sm-linux
+          asset_name: sm-linux-$tag
           overwrite: true
-          file_glob: true
+      - name: Upload Windows binaries
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: bin/sm.exe
+          asset_name: sm-$tag.exe
+          overwrite: true
+      - name: Upload Mac (x86_64) binaries
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: bin/sm-mac
+          asset_name: sm-mac-$tag
+          overwrite: true
+
+      - name: Upload mac (arm) binaries
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: bin/sm-mac-arm
+          asset_name: sm-mac-arm-$tag
+          overwrite: true
