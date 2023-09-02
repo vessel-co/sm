@@ -1,5 +1,10 @@
 {
   "tasks": {
-    "dev": "deno run --allow-all --watch main.ts"
+    "dev": "deno run --allow-all --watch main.ts",
+    "compile-linux": "deno compile --allow-all main.ts --output bin/sm-linux --target x86_64-unknown-linux-gnu",
+    "compile-windows": "deno compile --allow-all main.ts --output bin/sm.exe --target x86_64-pc-windows-msvc",
+    "compile-mac": "deno compile --allow-all main.ts --output bin/sm-mac --target x86_64-apple-darwin",
+    "compile-mac-arm": "deno compile --allow-all main.ts --output bin/sm-mac-arm --target aarch64-apple-darwin",
+    "compile-all": "deno task compile-linux && deno task compile-windows && deno task compile-mac && deno task compile-mac-arm"
   }
 }
