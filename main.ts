@@ -1,4 +1,4 @@
-import { colors, Command, Select, Table } from "./deps.ts";
+import { colors, Command, Select } from "./deps.ts";
 import { AWS, EC2, SSO } from "./deps.ts";
 
 const command = new Command()
@@ -17,40 +17,46 @@ if (import.meta.main) {
     }),
   );
 
-  if (Object.keys(ssoSessions).length === 0) {
+  if (ssoSessions.length === 0) {
     console.log(
-      "No SSO sessions found. Please run `aws configure sso-session` first.",
+      `No sso-session found in ${
+        colors.bold("~/.aws/config")
+      }. Please run \`aws configure sso-session\` first.`,
     );
     Deno.exit(1);
+  } else {
+    console.log(
+      `Found ${ssoSessions.length} SSO sessions in ${
+        colors.bold("~/.aws/config")
+      }`,
+    );
   }
 
-  new Table()
-    .fromJson(ssoSessions)
-    .header([
-      colors.bold("Name"),
-      colors.bold("Start URL"),
-      colors.bold("Region"),
-    ])
-    .border(true)
-    .padding(1)
-    .indent(1)
-    .render();
+  ssoSessions.forEach((session, idx) => {
+    const isOnlyOne = ssoSessions.length === 1 && idx === 0;
+    console.log(
+      [
+        isOnlyOne ? "  →" : "",
+        colors.bold(session.sso_session_name),
+        colors.dim(session.sso_start_url),
+        colors.dim(session.sso_region),
+        "(default)",
+      ].join("  "),
+    );
+  });
+
+  console.log("");
 
   let selectedSession = ssoSessions[0];
 
   if (ssoSessions.length > 1) {
-    console.log("Multiple SSO sessions found. Please select one.");
     selectedSession = await Select.prompt({
-      message: "Pick an AWS SSO session",
+      message: "Select an AWS SSO session",
       options: ssoSessions.map((session) => ({
         name: session.sso_session_name,
         value: session,
       })).sort((a, b) => a.name.localeCompare(b.name)),
     }) as any; // There's a bug in the typings for Select.prompt.
-  } else {
-    console.log(
-      `Defaulting to ${colors.bold(selectedSession.sso_session_name)}`,
-    );
   }
 
   let ssoToken: AWS.SSOToken;
@@ -62,6 +68,7 @@ if (import.meta.main) {
       throw e;
     }
 
+    // todo: if this fails, do an sso login automatically
     console.log(
       "SSO token not found. Run `aws sso login --sso-session" +
         selectedSession.sso_session_name + "` first.",
@@ -70,6 +77,7 @@ if (import.meta.main) {
     Deno.exit(1);
   }
 
+  // todo: if this fails, also do an aws sso login automatically
   const ssoClient = new SSO.SSOClient({
     region: selectedSession.sso_region,
   });
@@ -111,11 +119,11 @@ if (import.meta.main) {
 
   const selectedAccount: { accountId: number; roleName: string } = await Select
     .prompt({
-      message: "Pick an AWS account",
+      message: "Select an AWS account and role",
       options: accountsWithRoles.map((account) => ({
         name: `${account.accountName} #${account.accountId}`,
         options: account.roles.map((role) => ({
-          name: role,
+          name: `#${account.accountId} ${role}`,
           value: { accountId: account.accountId, roleName: role },
         })).sort((a, b) => a.name!.localeCompare(b.name!)),
       })).sort((a, b) => a.name.localeCompare(b.name)),
