@@ -17,9 +17,9 @@ const promptForSsoSession = async () => {
 
   if (ssoSessions.length === 0) {
     console.log(
-      `No sso-session found in ${
-        colors.bold("~/.aws/config")
-      }. Please run \`aws configure sso-session\` first.`,
+      `No sso-session found in ${colors.bold("~/.aws/config")}. Please run ${
+        colors.underline("aws configure sso-session")
+      } first.`,
     );
     Deno.exit(1);
   } else {
@@ -38,7 +38,7 @@ const promptForSsoSession = async () => {
         colors.bold(session.sso_session_name),
         colors.dim(session.sso_start_url),
         colors.dim(session.sso_region),
-        "(default)",
+        isOnlyOne ? "(default)" : "",
       ].join("  "),
     );
   });
@@ -69,10 +69,10 @@ const loadSsoTokenFromName = async (sessionName: string) => {
     if (!(e instanceof Deno.errors.NotFound)) {
       throw e;
     }
-
-    // todo: if this fails, do an sso login automatically
     console.log(
-      `SSO token not found. Run \`aws sso login --sso-session ${sessionName}\` first.`,
+      `SSO token not found. Run ${
+        colors.underline("aws sso login --sso-session " + sessionName)
+      } first.`,
     );
 
     Deno.exit(1);
@@ -165,12 +165,34 @@ if (import.meta.main) {
 
   const ssoToken = await loadSsoTokenFromName(selectedSession.sso_session_name);
 
-  // todo: if this fails, also do an aws sso login automatically
   const ssoClient = new SSO.SSOClient({
     region: selectedSession.sso_region,
   });
 
-  const accountsWithRoles = await getAccountsAndRoles(ssoClient, ssoToken);
+  let accountsWithRoles;
+
+  try {
+    accountsWithRoles = await getAccountsAndRoles(ssoClient, ssoToken);
+  } catch (e) {
+    if (
+      e instanceof SSO.UnauthorizedException &&
+      // We check specifically for this message because the SDK doesn't
+      // distinguish between "token expired" and "you lack iam privs".
+      e.message === "Session token not found or invalid"
+    ) {
+      console.log(
+        `SSO token expired. Run ${
+          colors.underline(
+            "aws sso login --sso-session " + selectedSession.sso_session_name,
+          )
+        } first.`,
+      );
+
+      Deno.exit(1);
+    }
+
+    throw e;
+  }
 
   if (!accountsWithRoles || accountsWithRoles.length === 0) {
     console.error("No accounts or roles found");
