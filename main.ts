@@ -1,5 +1,6 @@
 import { colors, Command, Select } from "./deps.ts";
 import { AWS, EC2, SSO } from "./deps.ts";
+import { fromSso } from "./src/ssoTokenProvider.ts";
 
 const command = new Command()
   .name("sm")
@@ -60,34 +61,13 @@ const promptForSsoSession = async () => {
   return selectedSession;
 };
 
-const loadSsoTokenFromName = async (sessionName: string) => {
-  let ssoToken: AWS.SSOToken;
-
-  try {
-    ssoToken = await AWS.getSSOTokenFromFile(sessionName);
-  } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) {
-      throw e;
-    }
-    console.log(
-      `SSO token not found. Run ${
-        colors.underline("aws sso login --sso-session " + sessionName)
-      } first.`,
-    );
-
-    Deno.exit(1);
-  }
-
-  return ssoToken;
-};
-
 const getAccountsAndRoles = async (
   ssoClient: SSO.SSOClient,
-  ssoToken: AWS.SSOToken,
+  ssoAccessToken: string,
 ) => {
   const accounts = await ssoClient.send(
     new SSO.ListAccountsCommand({
-      accessToken: ssoToken.accessToken,
+      accessToken: ssoAccessToken,
     }),
   );
 
@@ -95,7 +75,7 @@ const getAccountsAndRoles = async (
     accounts.accountList?.map((account) =>
       ssoClient.send(
         new SSO.ListAccountRolesCommand({
-          accessToken: ssoToken.accessToken,
+          accessToken: ssoAccessToken,
           accountId: account.accountId,
         }),
       )
@@ -163,7 +143,14 @@ if (import.meta.main) {
 
   const selectedSession = await promptForSsoSession();
 
-  const ssoToken = await loadSsoTokenFromName(selectedSession.sso_session_name);
+  // const ssoToken = await loadSsoTokenFromName(selectedSession.sso_session_name);
+
+  const ssoTokenProvider = fromSso({
+    ssoRegion: selectedSession.sso_region,
+    ssoSessionName: selectedSession.sso_session_name,
+  });
+
+  const ssoAccessToken = await ssoTokenProvider();
 
   const ssoClient = new SSO.SSOClient({
     region: selectedSession.sso_region,
@@ -172,7 +159,10 @@ if (import.meta.main) {
   let accountsWithRoles;
 
   try {
-    accountsWithRoles = await getAccountsAndRoles(ssoClient, ssoToken);
+    accountsWithRoles = await getAccountsAndRoles(
+      ssoClient,
+      ssoAccessToken.token,
+    );
   } catch (e) {
     if (
       e instanceof SSO.UnauthorizedException &&
@@ -213,7 +203,7 @@ if (import.meta.main) {
 
   const shortTermCredentials = await ssoClient.send(
     new SSO.GetRoleCredentialsCommand({
-      accessToken: ssoToken.accessToken,
+      accessToken: ssoAccessToken.token,
       accountId: selectedAccount.accountId.toString(),
       roleName: selectedAccount.roleName,
     }),
