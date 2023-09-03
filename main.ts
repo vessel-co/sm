@@ -203,7 +203,7 @@ if (import.meta.main) {
     .prompt({
       message: "Select an AWS account and role",
       search: true,
-      format: (account) => `#${account.accountId} ${account.roleName}`,
+      format: (account) => `${account.accountId}-${account.roleName}`,
       options: accountsWithRoles.map((account) => ({
         name: `${account.accountName} #${account.accountId}`,
         options: account.roles.map((role) => ({
@@ -237,9 +237,21 @@ if (import.meta.main) {
     credentials,
   });
 
-  const instances = await ec2Client.send(
-    new Ec2.DescribeInstancesCommand({}),
-  );
+  let instances;
+
+  try {
+    instances = await ec2Client.send(
+      new Ec2.DescribeInstancesCommand({}),
+    );
+  } catch (e) {
+    if (
+      e instanceof Ec2.EC2ServiceException && e.name === "UnauthorizedOperation"
+    ) {
+      console.error(`Unauthorized to perform ec2:DescribeInstances`);
+      Deno.exit(1);
+    }
+    throw e;
+  }
 
   const namedInstances: { instanceId: string; name: string }[] = [];
 
