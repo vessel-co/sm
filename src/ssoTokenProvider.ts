@@ -1,4 +1,4 @@
-import { AwsConfig, AwsTypes, colors, SsoOidc } from "../deps.ts";
+import { AwsConfig, AwsTypes, SsoOidc } from "../deps.ts";
 
 /**
  * Last refresh attempt time to ensure refresh is not attempted more than once every 30 seconds.
