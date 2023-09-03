@@ -1,4 +1,13 @@
-import { AwsConfig, colors, Command, Ec2, Select, Sso } from "./deps.ts";
+import {
+  AwsConfig,
+  colors,
+  Command,
+  Ec2,
+  Select,
+  type SelectOption,
+  type SelectOptionGroup,
+  Sso,
+} from "./deps.ts";
 import { fromSso } from "./src/ssoTokenProvider.ts";
 
 const command = new Command()
@@ -53,8 +62,10 @@ const promptForSsoSession = async () => {
       options: ssoSessions.map((session) => ({
         name: session.sso_session_name,
         value: session,
-      })).sort((a, b) => a.name.localeCompare(b.name)),
-    }) as any; // There's a bug in the typings for Select.prompt.
+      })).sort((a, b) => a.name.localeCompare(b.name)) as SelectOption<
+        typeof ssoSessions[number]
+      >[],
+    });
   }
 
   return selectedSession;
@@ -185,17 +196,29 @@ if (import.meta.main) {
     Deno.exit(1);
   }
 
-  const selectedAccount: { accountId: number; roleName: string } = await Select
+  accountsWithRoles.sort((a, b) =>
+    a.accountName!.localeCompare(b.accountName!)
+  );
+  accountsWithRoles.forEach((account) => {
+    account.roles.sort((a, b) => a!.localeCompare(b!));
+  });
+
+  const selectedAccount = await Select
     .prompt({
       message: "Select an AWS account and role",
+      search: true,
+      format: (account) => `#${account.accountId} ${account.roleName}`,
       options: accountsWithRoles.map((account) => ({
         name: `${account.accountName} #${account.accountId}`,
         options: account.roles.map((role) => ({
-          name: `#${account.accountId} ${role}`,
+          name: role,
           value: { accountId: account.accountId, roleName: role },
-        })).sort((a, b) => a.name!.localeCompare(b.name!)),
-      })).sort((a, b) => a.name.localeCompare(b.name)),
-    }) as any;
+        })),
+      })) as SelectOptionGroup<{
+        accountId: number;
+        roleName: string;
+      }>[],
+    });
 
   const shortTermCredentialsOutput = await ssoClient.send(
     new Sso.GetRoleCredentialsCommand({
@@ -236,13 +259,14 @@ if (import.meta.main) {
 
   const selectedInstance: string = await Select.prompt({
     message: "SSM into an EC2 instance",
+    search: true,
     options: namedInstances.sort(
       (a, b) => a.name.localeCompare(b.name),
     ).map((instance) => ({
       name: `${instance.instanceId} - ${instance.name}`,
       value: instance.instanceId,
-    })),
-  }) as any;
+    })) as SelectOption<string>[],
+  });
 
   startSsmProcessIntoInstance({
     region: selectedSession.sso_region,
