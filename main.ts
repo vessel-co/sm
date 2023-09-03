@@ -17,7 +17,7 @@ const promptForSsoSession = async () => {
   );
 
   if (ssoSessions.length === 0) {
-    console.log(
+    console.error(
       `No sso-session found in ${colors.bold("~/.aws/config")}. Please run ${
         colors.underline("aws configure sso-session")
       } first.`,
@@ -97,10 +97,10 @@ const getAccountsAndRoles = async (
 };
 
 const startSsmProcessIntoInstance = (
-  { region, instanceId, creds }: {
+  { region, instanceId, credentials }: {
     region: string;
     instanceId: string;
-    creds: SSO.RoleCredentials;
+    credentials: SSO.RoleCredentials;
   },
 ) => {
   const ssmCommand = new Deno.Command("aws", {
@@ -111,10 +111,9 @@ const startSsmProcessIntoInstance = (
       instanceId,
     ],
     env: {
-      AWS_ACCESS_KEY_ID: creds?.accessKeyId!,
-      AWS_SECRET_ACCESS_KEY: creds
-        ?.secretAccessKey!,
-      AWS_SESSION_TOKEN: creds?.sessionToken!,
+      AWS_ACCESS_KEY_ID: credentials.accessKeyId!,
+      AWS_SECRET_ACCESS_KEY: credentials.secretAccessKey!,
+      AWS_SESSION_TOKEN: credentials.sessionToken!,
       AWS_REGION: region,
     },
     stderr: "inherit",
@@ -143,8 +142,6 @@ if (import.meta.main) {
 
   const selectedSession = await promptForSsoSession();
 
-  // const ssoToken = await loadSsoTokenFromName(selectedSession.sso_session_name);
-
   const ssoTokenProvider = fromSso({
     ssoRegion: selectedSession.sso_region,
     ssoSessionName: selectedSession.sso_session_name,
@@ -170,7 +167,7 @@ if (import.meta.main) {
       // distinguish between "token expired" and "you lack iam privs".
       e.message === "Session token not found or invalid"
     ) {
-      console.log(
+      console.error(
         `SSO token expired. Run ${
           colors.underline(
             "aws sso login --sso-session " + selectedSession.sso_session_name,
@@ -201,7 +198,7 @@ if (import.meta.main) {
       })).sort((a, b) => a.name.localeCompare(b.name)),
     }) as any;
 
-  const shortTermCredentials = await ssoClient.send(
+  const shortTermCredentialsOutput = await ssoClient.send(
     new SSO.GetRoleCredentialsCommand({
       accessToken: ssoAccessToken.token,
       accountId: selectedAccount.accountId.toString(),
@@ -209,13 +206,17 @@ if (import.meta.main) {
     }),
   );
 
+  // This is purely for convenience. We strip out the expiration date and
+  // mark the remaining short-term credential fields as required to satisfy
+  // the compiler.
+  const credentials = shortTermCredentialsOutput.roleCredentials! as Omit<
+    Required<SSO.RoleCredentials>,
+    "expiration"
+  >;
+
   const ec2Client = new EC2.EC2Client({
     region: selectedSession.sso_region,
-    credentials: {
-      accessKeyId: shortTermCredentials.roleCredentials?.accessKeyId!,
-      sessionToken: shortTermCredentials.roleCredentials?.sessionToken!,
-      secretAccessKey: shortTermCredentials.roleCredentials?.secretAccessKey!,
-    },
+    credentials,
   });
 
   const instances = await ec2Client.send(
@@ -247,6 +248,6 @@ if (import.meta.main) {
   startSsmProcessIntoInstance({
     region: selectedSession.sso_region,
     instanceId: selectedInstance,
-    creds: shortTermCredentials.roleCredentials!,
+    credentials,
   });
 }

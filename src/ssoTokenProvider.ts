@@ -35,7 +35,6 @@ const writeSSOTokenToFile = (id: string, ssoToken: AWS.SSOToken) => {
 
 const getNewSsoOidcToken = (ssoToken: AWS.SSOToken, ssoRegion: string) => {
   const ssoOidcClient = new SsoOidc.SSOOIDCClient({ region: ssoRegion });
-  console.log(ssoToken, ssoRegion);
 
   return ssoOidcClient.send(
     new SsoOidc.CreateTokenCommand({
@@ -104,9 +103,7 @@ async () => {
 
   try {
     lastRefreshAttemptTime.setTime(Date.now());
-    console.log("test1");
     const newSsoOidcToken = await getNewSsoOidcToken(ssoToken, ssoRegion);
-    console.log("test2");
     validateTokenKey("accessToken", newSsoOidcToken.accessToken);
     validateTokenKey("expiresIn", newSsoOidcToken.expiresIn);
     const newTokenExpiration = new Date(
@@ -122,6 +119,7 @@ async () => {
       });
     } catch (_e) {
       // Swallow error if unable to write token to file.
+      console.log(_e);
     }
 
     return {
