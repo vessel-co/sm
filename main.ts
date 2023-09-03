@@ -8,7 +8,7 @@ import {
   type SelectOptionGroup,
   Sso,
 } from "./deps.ts";
-import { fromSso } from "./src/ssoTokenProvider.ts";
+import { fromSso, TokenError } from "./src/ssoTokenProvider.ts";
 
 const command = new Command()
   .name("sm")
@@ -25,10 +25,10 @@ const promptForSsoSession = async () => {
   );
 
   if (ssoSessions.length === 0) {
+    const path = colors.bold("~/.aws/config");
+    const command = colors.underline("aws configure sso-session");
     console.error(
-      `No sso-session found in ${colors.bold("~/.aws/config")}. Please run ${
-        colors.underline("aws configure sso-session")
-      } first.`,
+      `No sso-session found in ${path}. Run ${command} first.`,
     );
     Deno.exit(1);
   } else {
@@ -152,44 +152,40 @@ if (import.meta.main) {
 
   const selectedSession = await promptForSsoSession();
 
-  const ssoTokenProvider = fromSso({
-    ssoRegion: selectedSession.sso_region,
-    ssoSessionName: selectedSession.sso_session_name,
-  });
-
-  const ssoAccessToken = await ssoTokenProvider();
-
   const ssoClient = new Sso.SSOClient({
     region: selectedSession.sso_region,
   });
 
-  let accountsWithRoles;
+  let ssoTokenProvider;
+  let ssoAccessToken;
 
   try {
-    accountsWithRoles = await getAccountsAndRoles(
-      ssoClient,
-      ssoAccessToken.token,
-    );
+    ssoTokenProvider = fromSso({
+      ssoRegion: selectedSession.sso_region,
+      ssoSessionName: selectedSession.sso_session_name,
+    });
+    ssoAccessToken = await ssoTokenProvider();
   } catch (e) {
-    if (
-      e instanceof Sso.UnauthorizedException &&
-      // We check specifically for this message because the SDK doesn't
-      // distinguish between "token expired" and "you lack iam privs".
-      e.message === "Session token not found or invalid"
-    ) {
-      console.error(
-        `SSO token expired. Run ${
-          colors.underline(
-            "aws sso login --sso-session " + selectedSession.sso_session_name,
-          )
-        } first.`,
-      );
+    if (e instanceof TokenError) {
+      const command =
+        `aws sso login --sso-session ${selectedSession.sso_session_name}`;
+
+      const message = e.code === "SSO_TOKEN_FILE_NOT_FOUND"
+        ? "SSO token file not found"
+        : "SSO token expired";
+
+      console.error(`${message}. Run ${colors.underline(command)} first.`);
 
       Deno.exit(1);
     }
 
     throw e;
   }
+
+  const accountsWithRoles = await getAccountsAndRoles(
+    ssoClient,
+    ssoAccessToken.token,
+  );
 
   if (!accountsWithRoles || accountsWithRoles.length === 0) {
     console.error("No accounts or roles found");

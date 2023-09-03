@@ -17,13 +17,14 @@ const validateTokenKey = (key: string, value: unknown, forRefresh = false) => {
       `Value not present for '${key}' in SSO Token${
         forRefresh ? ". Cannot refresh" : ""
       }.`,
+      "SSO_TOKEN_INVALID",
     );
   }
 };
 
 const validateTokenExpiry = (token: AwsTypes.TokenIdentity) => {
   if (token.expiration && token.expiration.getTime() < Date.now()) {
-    throw new TokenError(`Token is expired.`);
+    throw new TokenError(`Token is expired.`, "SSO_TOKEN_EXPIRED");
   }
 };
 
@@ -50,7 +51,7 @@ const getNewSsoOidcToken = (
 };
 
 export class TokenError extends Error {
-  constructor(message: string) {
+  constructor(message: string, public readonly code: string) {
     super(message);
     this.name = "TokenError";
   }
@@ -70,11 +71,7 @@ async () => {
     ssoToken = await AwsConfig.getSSOTokenFromFile(ssoSessionName);
   } catch (e) {
     if (e instanceof Deno.errors.NotFound) {
-      throw new TokenError(
-        `SSO token not found. Run ${
-          colors.underline("aws sso login --sso-session " + ssoSessionName)
-        } first.`,
-      );
+      throw new TokenError("Token file missing", "SSO_TOKEN_FILE_NOT_FOUND");
     }
 
     throw e;
@@ -122,7 +119,6 @@ async () => {
       });
     } catch (_e) {
       // Swallow error if unable to write token to file.
-      console.log(_e);
     }
 
     return {
@@ -130,7 +126,6 @@ async () => {
       expiration: newTokenExpiration,
     };
   } catch (_e) {
-    console.log(_e);
     // return existing token if it's still valid.
     validateTokenExpiry(existingToken);
     return existingToken;
