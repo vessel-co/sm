@@ -1,5 +1,4 @@
-import { colors, Command, Select } from "./deps.ts";
-import { AWS, EC2, SSO } from "./deps.ts";
+import { AwsConfig, colors, Command, Ec2, Select, Sso } from "./deps.ts";
 import { fromSso } from "./src/ssoTokenProvider.ts";
 
 const command = new Command()
@@ -8,7 +7,7 @@ const command = new Command()
   .description("A single command line tool for SSM'ing into ec2 instances");
 
 const promptForSsoSession = async () => {
-  const ssoSessions = Object.entries(await AWS.loadSsoSessionData()).map(
+  const ssoSessions = Object.entries(await AwsConfig.loadSsoSessionData()).map(
     ([key, value]) => ({
       sso_session_name: key,
       sso_start_url: value.sso_start_url ?? "",
@@ -62,11 +61,11 @@ const promptForSsoSession = async () => {
 };
 
 const getAccountsAndRoles = async (
-  ssoClient: SSO.SSOClient,
+  ssoClient: Sso.SSOClient,
   ssoAccessToken: string,
 ) => {
   const accounts = await ssoClient.send(
-    new SSO.ListAccountsCommand({
+    new Sso.ListAccountsCommand({
       accessToken: ssoAccessToken,
     }),
   );
@@ -74,7 +73,7 @@ const getAccountsAndRoles = async (
   const rolesPerAccount = await Promise.all(
     accounts.accountList?.map((account) =>
       ssoClient.send(
-        new SSO.ListAccountRolesCommand({
+        new Sso.ListAccountRolesCommand({
           accessToken: ssoAccessToken,
           accountId: account.accountId,
         }),
@@ -100,7 +99,7 @@ const startSsmProcessIntoInstance = (
   { region, instanceId, credentials }: {
     region: string;
     instanceId: string;
-    credentials: SSO.RoleCredentials;
+    credentials: Sso.RoleCredentials;
   },
 ) => {
   const ssmCommand = new Deno.Command("aws", {
@@ -149,7 +148,7 @@ if (import.meta.main) {
 
   const ssoAccessToken = await ssoTokenProvider();
 
-  const ssoClient = new SSO.SSOClient({
+  const ssoClient = new Sso.SSOClient({
     region: selectedSession.sso_region,
   });
 
@@ -162,7 +161,7 @@ if (import.meta.main) {
     );
   } catch (e) {
     if (
-      e instanceof SSO.UnauthorizedException &&
+      e instanceof Sso.UnauthorizedException &&
       // We check specifically for this message because the SDK doesn't
       // distinguish between "token expired" and "you lack iam privs".
       e.message === "Session token not found or invalid"
@@ -199,7 +198,7 @@ if (import.meta.main) {
     }) as any;
 
   const shortTermCredentialsOutput = await ssoClient.send(
-    new SSO.GetRoleCredentialsCommand({
+    new Sso.GetRoleCredentialsCommand({
       accessToken: ssoAccessToken.token,
       accountId: selectedAccount.accountId.toString(),
       roleName: selectedAccount.roleName,
@@ -210,17 +209,17 @@ if (import.meta.main) {
   // mark the remaining short-term credential fields as required to satisfy
   // the compiler.
   const credentials = shortTermCredentialsOutput.roleCredentials! as Omit<
-    Required<SSO.RoleCredentials>,
+    Required<Sso.RoleCredentials>,
     "expiration"
   >;
 
-  const ec2Client = new EC2.EC2Client({
+  const ec2Client = new Ec2.EC2Client({
     region: selectedSession.sso_region,
     credentials,
   });
 
   const instances = await ec2Client.send(
-    new EC2.DescribeInstancesCommand({}),
+    new Ec2.DescribeInstancesCommand({}),
   );
 
   const namedInstances: { instanceId: string; name: string }[] = [];

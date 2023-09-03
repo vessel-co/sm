@@ -1,4 +1,4 @@
-import { AWS, AwsTypes, colors, SsoOidc } from "../deps.ts";
+import { AwsConfig, AwsTypes, colors, SsoOidc } from "../deps.ts";
 
 /**
  * Last refresh attempt time to ensure refresh is not attempted more than once every 30 seconds.
@@ -27,13 +27,16 @@ const validateTokenExpiry = (token: AwsTypes.TokenIdentity) => {
   }
 };
 
-const writeSSOTokenToFile = (id: string, ssoToken: AWS.SSOToken) => {
-  const tokenFilepath = AWS.getSSOTokenFilepath(id);
+const writeSSOTokenToFile = (id: string, ssoToken: AwsConfig.SSOToken) => {
+  const tokenFilepath = AwsConfig.getSSOTokenFilepath(id);
   const tokenString = JSON.stringify(ssoToken, null, 2);
   return Deno.writeTextFile(tokenFilepath, tokenString);
 };
 
-const getNewSsoOidcToken = (ssoToken: AWS.SSOToken, ssoRegion: string) => {
+const getNewSsoOidcToken = (
+  ssoToken: AwsConfig.SSOToken,
+  ssoRegion: string,
+) => {
   const ssoOidcClient = new SsoOidc.SSOOIDCClient({ region: ssoRegion });
 
   return ssoOidcClient.send(
@@ -61,10 +64,10 @@ export const fromSso = ({ ssoSessionName, ssoRegion }: {
   ssoRegion: string;
 }): AwsTypes.TokenIdentityProvider =>
 async () => {
-  let ssoToken: AWS.SSOToken;
+  let ssoToken: AwsConfig.SSOToken;
 
   try {
-    ssoToken = await AWS.getSSOTokenFromFile(ssoSessionName);
+    ssoToken = await AwsConfig.getSSOTokenFromFile(ssoSessionName);
   } catch (e) {
     if (e instanceof Deno.errors.NotFound) {
       throw new TokenError(
