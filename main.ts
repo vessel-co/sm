@@ -12,7 +12,7 @@ import { fromSso, TokenError } from "./src/ssoTokenProvider.ts";
 
 const command = new Command()
   .name("sm")
-  .version("0.0.4")
+  .version("0.0.5")
   .description("A single command line tool for SSM'ing into ec2 instances");
 
 const promptForSsoSession = async () => {
