@@ -253,7 +253,8 @@ if (import.meta.main) {
     throw e;
   }
 
-  const namedInstances: { instanceId: string; name: string }[] = [];
+  const namedInstances: { instanceId: string; name: string; state: string }[] =
+    [];
 
   for (const reservation of instances.Reservations ?? []) {
     reservation.Instances?.forEach((instance) => {
@@ -261,7 +262,11 @@ if (import.meta.main) {
         tag,
       ) => tag.Value).join(", ") ?? "[no name]";
 
-      namedInstances.push({ instanceId: instance.InstanceId!, name });
+      namedInstances.push({
+        instanceId: instance.InstanceId!,
+        name,
+        state: instance.State?.Name!,
+      });
     });
   }
 
@@ -271,8 +276,9 @@ if (import.meta.main) {
     options: namedInstances.sort(
       (a, b) => a.name.localeCompare(b.name),
     ).map((instance) => ({
-      name: `${instance.instanceId} - ${instance.name}`,
+      name: `${instance.instanceId} - ${instance.name} (${instance.state})`,
       value: instance.instanceId,
+      disabled: instance.state !== "running",
     })) as SelectOption<string>[],
   });
 
