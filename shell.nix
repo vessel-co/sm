@@ -5,5 +5,6 @@ in
 pkgs.mkShell {
   buildInputs = [
     pkgs.deno
+    pkgs.niv
   ];
 }
