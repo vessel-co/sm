@@ -1,6 +1,6 @@
 {
-  "name": "@rob-bowes/sm",
-  "version": "0.0.7",
+  "name": "@vessel/sm",
+  "version": "0.0.8",
   "description": "A single command line tool for SSM'ing into ec2 instances",
   "exports": {
     ".": "./main.ts"
